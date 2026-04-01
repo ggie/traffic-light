@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GGIE'S TRAFFIC LIGHT</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;600;800&display=swap');
+
+:root {
+  --neon-cyan: #00ffff;
+  --neon-pink: #ff00ff;
+  --neon-yellow: #ffff00;
+  --neon-green: #00ff88;
+  --neon-orange: #ff8800;
+  --neon-red: #ff0044;
+  --neon-blue: #0088ff;
+  --dark-bg: #020408;
+  --panel-bg: rgba(0,20,40,0.92);
+  --panel-border: rgba(0,255,255,0.3);
+  --grid-color: rgba(0,255,255,0.05);
+  --road-color: #1a1a2e;
+  --road-line: #ffff00;
+  --sidewalk: #2a2a4a;
+  --grass: #0a1a0a;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  background: var(--dark-bg);
+  font-family: 'Orbitron', monospace;
+  overflow: hidden;
+  width: 100vw; height: 100vh;
+  user-select: none;
+  touch-action: none;
+}
+
+/* ═══════════════ ARCADE BG CHARACTERS ═══════════════ */
+#arcadeBg {
+  position: fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden;
+}
+.arcade-char {
+  position:absolute; font-size:24px; opacity:0.12;
+  animation: floatChar linear infinite;
+  filter: drop-shadow(0 0 6px var(--neon-cyan));
+}
+@keyframes floatChar {
+  0%   { transform: translateY(100vh) rotate(0deg); opacity:0; }
+  10%  { opacity:0.12; }
+  90%  { opacity:0.12; }
+  100% { transform: translateY(-120px) rotate(360deg); opacity:0; }
+}
+
+/* ═══════════════ HUD TOP BAR ═══════════════ */
+#hud {
+  position:fixed; top:0; left:0; right:0; z-index:100;
+  height:56px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.95) 0%, rgba(0,10,20,0.85) 100%);
+  border-bottom: 1px solid var(--neon-cyan);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 12px; gap:8px;
+  box-shadow: 0 0 20px rgba(0,255,255,0.2);
+}
+.hud-title {
+  font-size:13px; font-weight:900; letter-spacing:3px; color:var(--neon-cyan);
+  text-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan);
+  white-space:nowrap;
+  animation: titlePulse 3s ease-in-out infinite;
+}
+@keyframes titlePulse {
+  0%,100%{ text-shadow:0 0 10px var(--neon-cyan),0 0 20px var(--neon-cyan); }
+  50%{ text-shadow:0 0 20px var(--neon-cyan),0 0 40px var(--neon-cyan),0 0 60px var(--neon-cyan); }
+}
+.hud-stats { display:flex; gap:10px; align-items:center; }
+.stat-box {
+  background: rgba(0,255,255,0.05); border:1px solid rgba(0,255,255,0.2);
+  border-radius:4px; padding:3px 8px; font-size:9px; color:var(--neon-cyan);
+  font-family:'Share Tech Mono', monospace;
+}
+.stat-val { color:var(--neon-yellow); font-size:11px; font-weight:700; }
+.hud-btn {
+  background:rgba(0,255,255,0.08); border:1px solid rgba(0,255,255,0.3);
+  color:var(--neon-cyan); font-family:'Orbitron',monospace; font-size:9px;
+  padding:5px 10px; border-radius:4px; cursor:pointer; letter-spacing:1px;
+  transition:all 0.2s; white-space:nowrap;
+}
+.hud-btn:hover, .hud-btn.active {
+  background:rgba(0,255,255,0.2); box-shadow:0 0 10px rgba(0,255,255,0.4);
+}
+
+/* ═══════════════ GAME CANVAS ═══════════════ */
+#gameCanvas {
+  position:fixed; top:56px; left:0;
+  width:100%; height:calc(100vh - 56px);
+  cursor:crosshair;
+  z-index:1;
+}
+
+/* ═══════════════ SIDE PANELS ═══════════════ */
+.side-panel {
+  position:fixed; top:56px; z-index:50;
+  width:220px; height:calc(100vh - 56px);
+  background: var(--panel-bg);
+  border:1px solid var(--panel-border);
+  overflow-y:auto; overflow-x:hidden;
+  transition: transform 0.3s ease;
+  scrollbar-width:thin; scrollbar-color:var(--neon-cyan) transparent;
+}
+.side-panel::-webkit-scrollbar { width:3px; }
+.side-panel::-webkit-scrollbar-thumb { background:var(--neon-cyan); border-radius:2px; }
+
+#panelLeft { left:0; }
+#panelRight { right:0; transform:translateX(0); }
+#panelLeft.collapsed { transform:translateX(-220px); }
+#panelRight.collapsed { transform:translateX(220px); }
+
+.panel-header {
+  padding:12px; background:rgba(0,255,255,0.05);
+  border-bottom:1px solid var(--panel-border);
+  font-size:10px; letter-spacing:2px; color:var(--neon-cyan);
+  display:flex; align-items:center; gap:8px;
+  text-shadow:0 0 8px var(--neon-cyan);
+}
+.panel-section { padding:10px; border-bottom:1px solid rgba(0,255,255,0.1); }
+.panel-label { font-size:8px; color:rgba(0,255,255,0.5); letter-spacing:1px; margin-bottom:6px; }
+
+/* Vehicle selector */
+.vehicle-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.v-card {
+  background:rgba(0,255,255,0.04); border:1px solid rgba(0,255,255,0.15);
+  border-radius:6px; padding:6px; cursor:pointer; transition:all 0.2s;
+  text-align:center; position:relative; overflow:hidden;
+}
+.v-card:hover { border-color:var(--neon-cyan); background:rgba(0,255,255,0.1); }
+.v-card.selected { border-color:var(--neon-yellow); background:rgba(255,255,0,0.08);
+  box-shadow:0 0 10px rgba(255,255,0,0.2); }
+.v-card .v-emoji { font-size:22px; display:block; }
+.v-card .v-name { font-size:7px; color:rgba(255,255,255,0.7); margin-top:3px; letter-spacing:0.5px; font-family:'Share Tech Mono',monospace; }
+.v-card .v-speed { font-size:7px; color:var(--neon-green); }
+.v-category { font-size:8px; color:var(--neon-pink); letter-spacing:1px; margin:8px 0 4px; padding:4px 6px; border-left:2px solid var(--neon-pink); }
+
+/* Traffic Light Status */
+.tl-display {
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1);
+  border-radius:8px; padding:10px; margin:6px 0;
+}
+.tl-bulb {
+  width:28px; height:28px; border-radius:50%;
+  border:2px solid rgba(255,255,255,0.2);
+  transition:all 0.3s;
+}
+.tl-bulb.active-red    { background:#ff0044; box-shadow:0 0 15px #ff0044,0 0 30px #ff0044; }
+.tl-bulb.active-yellow { background:#ffaa00; box-shadow:0 0 15px #ffaa00,0 0 30px #ffaa00; }
+.tl-bulb.active-green  { background:#00ff88; box-shadow:0 0 15px #00ff88,0 0 30px #00ff88; }
+.tl-bulb.inactive-red    { background:rgba(255,0,68,0.15); }
+.tl-bulb.inactive-yellow { background:rgba(255,170,0,0.15); }
+.tl-bulb.inactive-green  { background:rgba(0,255,136,0.15); }
+
+.timer-bar-wrap { width:100%; background:rgba(255,255,255,0.1); border-radius:2px; height:4px; overflow:hidden; }
+.timer-bar { height:100%; border-radius:2px; transition:width 0.1s linear; }
+.timer-bar.red    { background:var(--neon-red); }
+.timer-bar.yellow { background:var(--neon-orange); }
+.timer-bar.green  { background:var(--neon-green); }
+
+/* Speed meter */
+.speed-gauge {
+  position:relative; width:100%; height:70px; margin:6px 0;
+  background:rgba(0,0,0,0.3); border-radius:8px; border:1px solid rgba(0,255,255,0.1);
+  display:flex; align-items:center; justify-content:center; flex-direction:column; gap:2px;
+}
+.speed-num { font-size:28px; font-weight:900; color:var(--neon-green); font-family:'Orbitron',monospace;
+  text-shadow:0 0 15px var(--neon-green); }
+.speed-unit { font-size:9px; color:rgba(0,255,255,0.5); letter-spacing:2px; }
+
+/* Mini map */
+#miniMap {
+  width:100%; aspect-ratio:1.2; background:rgba(0,0,0,0.5);
+  border:1px solid rgba(0,255,255,0.2); border-radius:6px;
+  position:relative; overflow:hidden;
+}
+.mm-road-h, .mm-road-v { position:absolute; background:rgba(100,100,150,0.4); }
+.mm-road-h { height:14%; width:100%; }
+.mm-road-v { width:14%; height:100%; }
+.mm-player { position:absolute; width:6px; height:6px; background:var(--neon-yellow);
+  border-radius:50%; box-shadow:0 0 6px var(--neon-yellow); transform:translate(-50%,-50%);
+  transition:left 0.05s, top 0.05s; z-index:3; }
+
+/* ═══════════════ JOYSTICK ═══════════════ */
+#joystickWrap {
+  position:fixed; bottom:20px; left:20px; z-index:60;
+  transition: opacity 0.3s;
+}
+#joystickWrap.hidden { opacity:0; pointer-events:none; }
+.jpad {
+  display:grid; grid-template-columns:50px 50px 50px;
+  grid-template-rows:50px 50px 50px; gap:4px;
+}
+.jbtn {
+  background:rgba(0,255,255,0.08); border:1px solid rgba(0,255,255,0.3);
+  border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-size:20px; cursor:pointer; transition:all 0.1s;
+  -webkit-user-select:none; touch-action:none;
+}
+.jbtn:active, .jbtn.pressed {
+  background:rgba(0,255,255,0.3); box-shadow:0 0 12px rgba(0,255,255,0.5);
+  transform:scale(0.92);
+}
+.jbtn.center { background:rgba(255,255,0,0.06); border-color:rgba(255,255,0,0.3); font-size:14px; color:var(--neon-yellow); }
+
+/* ═══════════════ DASHBOARD BOTTOM ═══════════════ */
+#bottomBar {
+  position:fixed; bottom:0; left:220px; right:220px; z-index:50; height:70px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(0,10,20,0.85) 100%);
+  border-top:1px solid var(--panel-border);
+  display:flex; align-items:center; justify-content:space-around; padding:0 10px;
+}
+.bb-item { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.bb-label { font-size:7px; color:rgba(0,255,255,0.5); letter-spacing:1px; }
+.bb-val { font-size:16px; font-weight:900; color:var(--neon-cyan); font-family:'Orbitron',monospace;
+  text-shadow:0 0 8px var(--neon-cyan); }
+
+/* ═══════════════ VEHICLE SELECT MODAL ═══════════════ */
+#vsModal {
+  position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.9);
+  display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(8px);
+}
+#vsModal.hidden { display:none; }
+.vs-panel {
+  background:rgba(0,10,25,0.98); border:1px solid var(--neon-cyan);
+  border-radius:12px; padding:20px; max-width:680px; width:95%;
+  max-height:90vh; overflow-y:auto;
+  box-shadow:0 0 40px rgba(0,255,255,0.2);
+}
+.vs-title { font-size:16px; color:var(--neon-cyan); letter-spacing:4px; text-align:center;
+  margin-bottom:16px; text-shadow:0 0 15px var(--neon-cyan); }
+.vs-tabs { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+.vs-tab {
+  padding:6px 14px; border:1px solid rgba(0,255,255,0.2); border-radius:20px;
+  font-size:9px; color:rgba(0,255,255,0.6); cursor:pointer; transition:all 0.2s; letter-spacing:1px;
+}
+.vs-tab.active { border-color:var(--neon-pink); color:var(--neon-pink); background:rgba(255,0,255,0.08); }
+.vs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; }
+.vs-card {
+  background:rgba(0,255,255,0.03); border:1px solid rgba(0,255,255,0.15);
+  border-radius:8px; padding:12px; cursor:pointer; transition:all 0.2s; text-align:center;
+}
+.vs-card:hover { border-color:var(--neon-cyan); background:rgba(0,255,255,0.08); transform:translateY(-2px); }
+.vs-card.selected { border-color:var(--neon-yellow); background:rgba(255,255,0,0.08); }
+.vs-card .vc-icon { font-size:32px; display:block; margin-bottom:6px; }
+.vs-card .vc-name { font-size:10px; color:white; font-weight:700; }
+.vs-card .vc-sub { font-size:8px; color:rgba(0,255,255,0.5); margin-top:2px; font-family:'Share Tech Mono',monospace; }
+.vs-bars { margin-top:8px; display:flex; flex-direction:column; gap:3px; }
+.vs-bar-row { display:flex; align-items:center; gap:4px; }
+.vs-bar-label { font-size:7px; color:rgba(255,255,255,0.4); width:30px; }
+.vs-bar-track { flex:1; height:3px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden; }
+.vs-bar-fill { height:100%; border-radius:2px; }
+.vs-confirm {
+  margin-top:16px; width:100%; padding:12px; background:rgba(0,255,255,0.1);
+  border:1px solid var(--neon-cyan); color:var(--neon-cyan); font-family:'Orbitron',monospace;
+  font-size:11px; letter-spacing:3px; cursor:pointer; border-radius:6px; transition:all 0.2s;
+}
+.vs-confirm:hover { background:rgba(0,255,255,0.2); box-shadow:0 0 20px rgba(0,255,255,0.3); }
+
+/* ═══════════════ SCORE POPUP ═══════════════ */
+.score-pop {
+  position:absolute; pointer-events:none; z-index:80;
+  font-family:'Orbitron',monospace; font-size:16px; font-weight:900;
+  text-shadow:0 0 10px currentColor; animation:scoreFly 1.2s ease-out forwards;
+}
+@keyframes scoreFly {
+  0%  { opacity:1; transform:translateY(0) scale(1); }
+  100%{ opacity:0; transform:translateY(-60px) scale(0.5); }
+}
+
+/* ═══════════════ NEON SCAN LINES ═══════════════ */
+#scanlines {
+  position:fixed; inset:0; z-index:1000; pointer-events:none;
+  background:repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+  animation:scanMove 8s linear infinite;
+}
+@keyframes scanMove {
+  0%  { background-position:0 0; }
+  100%{ background-position:0 100vh; }
+}
+
+/* corner decorations */
+.corner-deco {
+  position:fixed; z-index:101; width:40px; height:40px; pointer-events:none;
+}
+.corner-deco::before, .corner-deco::after {
+  content:''; position:absolute; background:var(--neon-cyan);
+}
+.corner-deco::before { width:100%; height:2px; top:0; left:0; }
+.corner-deco::after  { width:2px; height:100%; top:0; left:0; }
+.cd-tl { top:56px; left:0; }
+.cd-tr { top:56px; right:0; transform:scaleX(-1); }
+.cd-bl { bottom:0; left:0; transform:scaleY(-1); }
+.cd-br { bottom:0; right:0; transform:scale(-1,-1); }
+
+/* scrollbar */
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:rgba(0,0,0,0.2); }
+::-webkit-scrollbar-thumb { background:rgba(0,255,255,0.3); border-radius:2px; }
+
+/* toggle panel btns */
+.panel-toggle {
+  position:fixed; z-index:60; top:50%; transform:translateY(-50%);
+  background:rgba(0,20,40,0.9); border:1px solid var(--panel-border);
+  color:var(--neon-cyan); width:18px; height:50px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:10px;
+  transition:all 0.2s;
+}
+.panel-toggle:hover { background:rgba(0,255,255,0.15); }
+#toggleLeft  { left:220px; border-radius:0 6px 6px 0; }
+#toggleRight { right:220px; border-radius:6px 0 0 6px; }
+
+/* glow effects */
+@keyframes neonFlicker {
+  0%,19%,21%,23%,25%,54%,56%,100% { opacity:1; }
+  20%,22%,24%,55% { opacity:0.4; }
+}
+
+.notification {
+  position:fixed; top:70px; left:50%; transform:translateX(-50%);
+  background:rgba(0,10,20,0.95); border:1px solid var(--neon-cyan);
+  color:var(--neon-cyan); font-size:10px; letter-spacing:2px;
+  padding:8px 20px; border-radius:20px; z-index:150;
+  animation:notifFade 2.5s ease-out forwards;
+  box-shadow:0 0 15px rgba(0,255,255,0.3);
+  white-space:nowrap;
+}
+@keyframes notifFade {
+  0%  { opacity:0; transform:translateX(-50%) translateY(-10px); }
+  15% { opacity:1; transform:translateX(-50%) translateY(0); }
+  70% { opacity:1; }
+  100%{ opacity:0; transform:translateX(-50%) translateY(-10px); }
+}
+</style>
+</head>
+<body>
+
+<!-- Arcade BG Characters -->
+<div id="arcadeBg"></div>
+
+<!-- Scan lines -->
+<div id="scanlines"></div>
+
+<!-- Corner decorations -->
+<div class="corner-deco cd-tl"></div>
+<div class="corner-deco cd-tr"></div>
+<div class="corner-deco cd-bl"></div>
+<div class="corner-deco cd-br"></div>
+
+<!-- ═══ HUD TOP BAR ═══ -->
+<div id="hud">
+  <div class="hud-title">⬡ GGIE'S TRAFFIC LIGHT ⬡</div>
+  <div class="hud-stats">
+    <div class="stat-box">SCORE<br><span class="stat-val" id="hudScore">0</span></div>
+    <div class="stat-box">COINS<br><span class="stat-val" id="hudCoins">0</span></div>
+    <div class="stat-box">LEVEL<br><span class="stat-val" id="hudLevel">1</span></div>
+    <div class="stat-box">TIME<br><span class="stat-val" id="hudTime">00:00</span></div>
+  </div>
+  <div style="display:flex;gap:6px;">
+    <button class="hud-btn" onclick="openVehicleSelect()">🚗 VEHICLES</button>
+    <button class="hud-btn" id="btnToggleJoy" onclick="toggleJoystick()">🕹️ JOY</button>
+    <button class="hud-btn" onclick="toggleCamera()">📷 CAM</button>
+    <button class="hud-btn" onclick="togglePause()">⏸️ PAUSE</button>
+  </div>
+</div>
+
+<!-- ═══ GAME CANVAS ═══ -->
+<canvas id="gameCanvas"></canvas>
+
+<!-- ═══ LEFT PANEL ═══ -->
+<div id="panelLeft" class="side-panel">
+  <div class="panel-header">⬡ TRAFFIC CONTROL</div>
+  <div class="panel-section">
+    <div class="panel-label">NORTH INTERSECTION</div>
+    <div class="tl-display" id="tlNorth">
+      <div class="tl-bulb" id="tlN-red"></div>
+      <div class="tl-bulb" id="tlN-yellow"></div>
+      <div class="tl-bulb" id="tlN-green"></div>
+      <div class="timer-bar-wrap"><div class="timer-bar" id="tlN-bar" style="width:100%"></div></div>
+      <div style="font-size:9px;color:rgba(0,255,255,0.6);font-family:'Share Tech Mono',monospace;" id="tlN-timer">15s</div>
+    </div>
+    <div class="panel-label">SOUTH INTERSECTION</div>
+    <div class="tl-display" id="tlSouth">
+      <div class="tl-bulb" id="tlS-red"></div>
+      <div class="tl-bulb" id="tlS-yellow"></div>
+      <div class="tl-bulb" id="tlS-green"></div>
+      <div class="timer-bar-wrap"><div class="timer-bar" id="tlS-bar" style="width:100%"></div></div>
+      <div style="font-size:9px;color:rgba(0,255,255,0.6);font-family:'Share Tech Mono',monospace;" id="tlS-timer">15s</div>
+    </div>
+    <div class="panel-label">EAST INTERSECTION</div>
+    <div class="tl-display">
+      <div class="tl-bulb" id="tlE-red"></div>
+      <div class="tl-bulb" id="tlE-yellow"></div>
+      <div class="tl-bulb" id="tlE-green"></div>
+      <div class="timer-bar-wrap"><div class="timer-bar" id="tlE-bar" style="width:100%"></div></div>
+      <div style="font-size:9px;color:rgba(0,255,255,0.6);font-family:'Share Tech Mono',monospace;" id="tlE-timer">15s</div>
+    </div>
+    <div class="panel-label">WEST INTERSECTION</div>
+    <div class="tl-display">
+      <div class="tl-bulb" id="tlW-red"></div>
+      <div class="tl-bulb" id="tlW-yellow"></div>
+      <div class="tl-bulb" id="tlW-green"></div>
+      <div class="timer-bar-wrap"><div class="timer-bar" id="tlW-bar" style="width:100%"></div></div>
+      <div style="font-size:9px;color:rgba(0,255,255,0.6);font-family:'Share Tech Mono',monospace;" id="tlW-timer">15s</div>
+    </div>
+  </div>
+  <div class="panel-section">
+    <div class="panel-label">SPEED CONTROL</div>
+    <div class="speed-gauge">
+      <div class="speed-num" id="speedNum">0</div>
+      <div class="speed-unit">KM/H</div>
+    </div>
+    <input type="range" min="0" max="300" value="0" id="speedSlider" style="width:100%;accent-color:var(--neon-cyan);margin-top:6px;" readonly>
+  </div>
+  <div class="panel-section">
+    <div class="panel-label">MINI MAP</div>
+    <div id="miniMap">
+      <div class="mm-road-h" style="top:33%;"></div>
+      <div class="mm-road-h" style="top:60%;"></div>
+      <div class="mm-road-v" style="left:33%;"></div>
+      <div class="mm-road-v" style="left:60%;"></div>
+      <div class="mm-player" id="mmPlayer" style="left:50%;top:50%;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RIGHT PANEL ═══ -->
+<div id="panelRight" class="side-panel">
+  <div class="panel-header">⬡ VEHICLE STATS</div>
+  <div class="panel-section">
+    <div class="panel-label">ACTIVE VEHICLE</div>
+    <div style="text-align:center;padding:10px 0;">
+      <div style="font-size:48px;" id="activeVehicleIcon">🏎️</div>
+      <div style="font-size:11px;color:white;font-weight:700;margin-top:6px;" id="activeVehicleName">BUGATTI CHIRON</div>
+      <div style="font-size:9px;color:var(--neon-cyan);margin-top:3px;" id="activeVehicleType">SUPERCAR</div>
+    </div>
+    <div class="vs-bars" id="activeVehicleBars">
+      <div class="vs-bar-row"><span class="vs-bar-label">SPD</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:98%;background:var(--neon-green);"></div></div></div>
+      <div class="vs-bar-row"><span class="vs-bar-label">ACC</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:92%;background:var(--neon-cyan);"></div></div></div>
+      <div class="vs-bar-row"><span class="vs-bar-label">HDL</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:80%;background:var(--neon-pink);"></div></div></div>
+    </div>
+  </div>
+  <div class="panel-section">
+    <div class="panel-label">LIVE TELEMETRY</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;">
+      <div class="stat-box" style="text-align:center;">POS X<br><span class="stat-val" id="telX">0</span></div>
+      <div class="stat-box" style="text-align:center;">POS Y<br><span class="stat-val" id="telY">0</span></div>
+      <div class="stat-box" style="text-align:center;">ANGLE<br><span class="stat-val" id="telAngle">0°</span></div>
+      <div class="stat-box" style="text-align:center;">GEAR<br><span class="stat-val" id="telGear">N</span></div>
+    </div>
+  </div>
+  <div class="panel-section">
+    <div class="panel-label">TRAFFIC STATUS</div>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+      <div class="stat-box">AI VEHICLES<br><span class="stat-val" id="aiCount">0</span></div>
+      <div class="stat-box">VIOLATIONS<br><span class="stat-val" id="violations">0</span></div>
+      <div class="stat-box">INTERSECTIONS<br><span class="stat-val">4 ACTIVE</span></div>
+    </div>
+  </div>
+  <div class="panel-section">
+    <div class="panel-label">CONTROLS</div>
+    <div style="font-size:8px;color:rgba(0,255,255,0.6);line-height:1.8;font-family:'Share Tech Mono',monospace;">
+      ↑ / W — ACCELERATE<br>
+      ↓ / S — BRAKE/REVERSE<br>
+      ← / A — STEER LEFT<br>
+      → / D — STEER RIGHT<br>
+      SPACE — HONK<br>
+      C — CHANGE CAMERA<br>
+      V — VEHICLE SELECT<br>
+      J — TOGGLE JOYSTICK<br>
+      P — PAUSE
+    </div>
+  </div>
+</div>
+
+<!-- Panel toggles -->
+<div id="toggleLeft" class="panel-toggle" onclick="togglePanel('left')">◀</div>
+<div id="toggleRight" class="panel-toggle" onclick="togglePanel('right')">▶</div>
+
+<!-- ═══ BOTTOM BAR ═══ -->
+<div id="bottomBar">
+  <div class="bb-item"><div class="bb-label">DISTANCE</div><div class="bb-val" id="bbDist">0m</div></div>
+  <div class="bb-item"><div class="bb-label">TOP SPEED</div><div class="bb-val" id="bbTop">0</div></div>
+  <div class="bb-item"><div class="bb-label">FUEL</div><div class="bb-val" id="bbFuel">100%</div></div>
+  <div class="bb-item"><div class="bb-label">LAPS</div><div class="bb-val" id="bbLaps">0</div></div>
+  <div class="bb-item"><div class="bb-label">STATUS</div><div class="bb-val" id="bbStatus" style="color:var(--neon-green);">GO</div></div>
+</div>
+
+<!-- ═══ JOYSTICK ═══ -->
+<div id="joystickWrap">
+  <div class="jpad">
+    <div></div>
+    <div class="jbtn" id="jUp"   data-key="ArrowUp">▲</div>
+    <div></div>
+    <div class="jbtn" id="jLeft" data-key="ArrowLeft">◀</div>
+    <div class="jbtn center" id="jHorn">📯</div>
+    <div class="jbtn" id="jRight" data-key="ArrowRight">▶</div>
+    <div></div>
+    <div class="jbtn" id="jDown" data-key="ArrowDown">▼</div>
+    <div></div>
+  </div>
+</div>
+
+<!-- ═══ VEHICLE SELECT MODAL ═══ -->
+<div id="vsModal">
+  <div class="vs-panel">
+    <div class="vs-title">⬡ SELECT YOUR VEHICLE ⬡</div>
+    <div class="vs-tabs" id="vsTabs"></div>
+    <div class="vs-grid" id="vsGrid"></div>
+    <button class="vs-confirm" onclick="confirmVehicle()">⬡ DEPLOY VEHICLE ⬡</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  VEHICLE DATABASE
+// ══════════════════════════════════════════════════
+const VEHICLES = {
+  supercars: [
+    { id:'bugatti_chiron',   name:'BUGATTI CHIRON',    icon:'🏎️', top:420, acc:95, hdl:78, color:'#00aaff' },
+    { id:'ferrari_sf90',     name:'FERRARI SF90',      icon:'🚗', top:340, acc:92, hdl:88, color:'#ff2200' },
+    { id:'lamborghini_sv',   name:'LAMBO AVENTADOR SV',icon:'🏎️', top:350, acc:91, hdl:85, color:'#ff8800' },
+    { id:'koenigsegg_jesko', name:'KOENIGSEGG JESKO',  icon:'🚗', top:480, acc:98, hdl:80, color:'#222222' },
+    { id:'mclaren_p1',       name:'McLAREN P1',        icon:'🏎️', top:350, acc:93, hdl:90, color:'#ff6600' },
+    { id:'porsche_918',      name:'PORSCHE 918',       icon:'🏎️', top:345, acc:89, hdl:92, color:'#888800' },
+    { id:'rimac_nevera',     name:'RIMAC NEVERA',      icon:'🏎️', top:415, acc:99, hdl:82, color:'#8800ff' },
+    { id:'pagani_huayra',    name:'PAGANI HUAYRA',     icon:'🚗', top:370, acc:87, hdl:88, color:'#silver' },
+    { id:'ssc_tuatara',      name:'SSC TUATARA',       icon:'🏎️', top:455, acc:94, hdl:75, color:'#444444' },
+    { id:'hennessey_venom',  name:'HENNESSEY VF1',     icon:'🏎️', top:440, acc:93, hdl:74, color:'#cc0000' },
+    { id:'aston_valkyrie',   name:'ASTON VALKYRIE',    icon:'🏎️', top:402, acc:91, hdl:87, color:'#006600' },
+    { id:'mercedes_amg_one', name:'MERCEDES AMG ONE',  icon:'🚗', top:352, acc:90, hdl:86, color:'#cc9900' },
+    { id:'ford_gt',          name:'FORD GT HERITAGE',  icon:'🏎️', top:347, acc:86, hdl:83, color:'#0000cc' },
+    { id:'nissan_gtr_r50',   name:'NISSAN GTR R50',    icon:'🏎️', top:320, acc:88, hdl:91, color:'#888888' },
+    { id:'zenvo_aurora',     name:'ZENVO AURORA',      icon:'🚗', top:325, acc:87, hdl:84, color:'#cc6600' },
+  ],
+  aircraft: [
+    { id:'f22_raptor',     name:'F-22 RAPTOR',      icon:'✈️', top:1960, acc:99, hdl:70, color:'#aaaaaa' },
+    { id:'osprey_v22',     name:'V-22 OSPREY',      icon:'🚁', top:500,  acc:75, hdl:88, color:'#446644' },
+    { id:'sr71',           name:'SR-71 BLACKBIRD',  icon:'✈️', top:3540, acc:90, hdl:55, color:'#111111' },
+    { id:'ah64_apache',    name:'AH-64 APACHE',     icon:'🚁', top:300,  acc:80, hdl:92, color:'#336633' },
+    { id:'v35_lightning',  name:'F-35 LIGHTNING',   icon:'✈️', top:1920, acc:96, hdl:75, color:'#336688' },
+  ],
+  motorcycles: [
+    { id:'ducati_panigale', name:'DUCATI V4R',        icon:'🏍️', top:310, acc:97, hdl:94, color:'#ff2200' },
+    { id:'kawasaki_h2r',    name:'KAWASAKI H2R',      icon:'🏍️', top:400, acc:98, hdl:88, color:'#11aa11' },
+    { id:'bmw_s1000rr',     name:'BMW S1000RR',       icon:'🏍️', top:299, acc:94, hdl:95, color:'#0044cc' },
+    { id:'honda_cbr1000',   name:'HONDA CBR1000RR',   icon:'🏍️', top:299, acc:93, hdl:94, color:'#cc2200' },
+    { id:'suzuki_hayabusa', name:'SUZUKI HAYABUSA',   icon:'🏍️', top:312, acc:92, hdl:87, color:'#666600' },
+  ],
+  trucks: [
+    { id:'monster_grave',  name:'GRAVE DIGGER',     icon:'🚛', top:160, acc:70, hdl:60, color:'#225522' },
+    { id:'f150_raptor',    name:'FORD F-150 RAPTOR', icon:'🚙', top:200, acc:78, hdl:75, color:'#334466' },
+    { id:'tesla_semitruck',name:'TESLA SEMI',        icon:'🚚', top:130, acc:65, hdl:65, color:'#888888' },
+  ],
+  special: [
+    { id:'hoverboard',    name:'CYBER HOVERBOARD',  icon:'🛸', top:150, acc:85, hdl:99, color:'#00ffff' },
+    { id:'delorean',      name:'DELOREAN DMC-12',   icon:'🚗', top:200, acc:75, hdl:80, color:'#cccccc' },
+    { id:'battletank',    name:'ARCADE BATTLE TANK',icon:'💣', top:80,  acc:55, hdl:70, color:'#667744' },
+  ]
+};
+
+const VEHICLE_CATS = [
+  { key:'supercars', label:'🏎️ SUPERCARS' },
+  { key:'aircraft',  label:'✈️ AIRCRAFT'  },
+  { key:'motorcycles',label:'🏍️ MOTOS'  },
+  { key:'trucks',    label:'🚛 TRUCKS'    },
+  { key:'special',   label:'🛸 SPECIAL'   },
+];
+
+// ══════════════════════════════════════════════════
+//  GAME STATE
+// ══════════════════════════════════════════════════
+let state = {
+  selectedVehicle: VEHICLES.supercars[0],
+  pendingVehicle:  VEHICLES.supercars[0],
+  activeVehicleTab:'supercars',
+  keys: {},
+  joystickVisible: true,
+  paused: false,
+  cameraMode: 0, // 0=follow, 1=top, 2=cinematic
+  score: 0,
+  coins: 0,
+  level: 1,
+  startTime: Date.now(),
+  totalDist: 0,
+  topSpeed: 0,
+  violations: 0,
+  laps: 0,
+  fuel: 100,
+};
+
+let player = { x:0, y:0, angle:0, speed:0, maxSpeed:4.2, acc:0.12, brake:0.18, turnRate:0.045 };
+let camera = { x:0, y:0, scale:1, targetScale:1 };
+let aiVehicles = [];
+let particles = [];
+let coins3d = [];
+let scorePops = [];
+
+// ══════════════════════════════════════════════════
+//  TRAFFIC LIGHT LOGIC
+// ══════════════════════════════════════════════════
+/*
+  States: 'red'(15s) -> 'green'(15s) -> 'yellow'(5s) -> 'red' ...
+*/
+const TL_DURATIONS = { red:15, green:15, yellow:5 };
+const TL_IDS = ['N','S','E','W'];
+let trafficLights = {};
+
+TL_IDS.forEach((id, i) => {
+  // offset them so they don't all sync
+  trafficLights[id] = { state:'red', timer: 15 - (i*3), maxTimer:15 };
+});
+// N+S share phase, E+W share phase (opposite)
+trafficLights['S'].state = 'red';   trafficLights['S'].timer = trafficLights['N'].timer;
+trafficLights['E'].state = 'green'; trafficLights['E'].timer = 9;  trafficLights['E'].maxTimer = 15;
+trafficLights['W'].state = 'green'; trafficLights['W'].timer = 9;  trafficLights['W'].maxTimer = 15;
+
+let lastTLUpdate = Date.now();
+
+function updateTrafficLights(dt) {
+  const pairs = [['N','S'], ['E','W']];
+  pairs.forEach(pair => {
+    // Use N and E as leaders
+    const leader = pair[0];
+    const follower = pair[1];
+    const tl = trafficLights[leader];
+    tl.timer -= dt;
+    if (tl.timer <= 0) {
+      if (tl.state === 'red') {
+        tl.state = 'green'; tl.timer = TL_DURATIONS.green; tl.maxTimer = TL_DURATIONS.green;
+      } else if (tl.state === 'green') {
+        tl.state = 'yellow'; tl.timer = TL_DURATIONS.yellow; tl.maxTimer = TL_DURATIONS.yellow;
+      } else if (tl.state === 'yellow') {
+        tl.state = 'red'; tl.timer = TL_DURATIONS.red; tl.maxTimer = TL_DURATIONS.red;
+      }
+    }
+    // Sync follower
+    trafficLights[follower].state = tl.state;
+    trafficLights[follower].timer = tl.timer;
+    trafficLights[follower].maxTimer = tl.maxTimer;
+  });
+  renderTLPanels();
+}
+
+function renderTLPanels() {
+  TL_IDS.forEach(id => {
+    const tl = trafficLights[id];
+    const pct = Math.max(0, (tl.timer / tl.maxTimer) * 100);
+    ['red','yellow','green'].forEach(c => {
+      const el = document.getElementById(`tl${id}-${c}`);
+      if (!el) return;
+      const isActive = (c === tl.state) || (c === 'yellow' && tl.state === 'yellow');
+      const activeMap = { red: tl.state === 'red', yellow: tl.state === 'yellow', green: tl.state === 'green' };
+      el.className = 'tl-bulb ' + (activeMap[c] ? `active-${c}` : `inactive-${c}`);
+    });
+    const bar = document.getElementById(`tl${id}-bar`);
+    const timerEl = document.getElementById(`tl${id}-timer`);
+    if (bar) {
+      bar.style.width = pct + '%';
+      bar.className = 'timer-bar ' + tl.state;
+    }
+    if (timerEl) timerEl.textContent = Math.ceil(tl.timer) + 's';
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  MAP / WORLD SETUP
+// ══════════════════════════════════════════════════
+const WORLD = 5000; // world size
+const ROAD_W = 80;
+
+// Road layout: grid of roads
+const roads = [];
+// Horizontal roads at various Y
+const hRoadYs = [-1800, -900, 0, 900, 1800];
+const vRoadXs = [-1800, -900, 0, 900, 1800];
+hRoadYs.forEach(y => roads.push({type:'h', y, x1:-WORLD/2, x2:WORLD/2}));
+vRoadXs.forEach(x => roads.push({type:'v', x, y1:-WORLD/2, y2:WORLD/2}));
+
+// Intersections
+const intersections = [];
+hRoadYs.forEach(iy => vRoadXs.forEach(ix => intersections.push({x:ix, y:iy})));
+
+// Traffic lights at main intersections
+const mainIntersections = [
+  { x:0, y:0, tlId:'N' },
+  { x:900, y:0, tlId:'S' },
+  { x:0, y:900, tlId:'E' },
+  { x:-900, y:0, tlId:'W' },
+];
+
+// ══════════════════════════════════════════════════
+//  AI VEHICLES
+// ══════════════════════════════════════════════════
+const AI_TYPES = [
+  {icon:'🚗',speed:1.2,color:'#4488ff'},{icon:'🚙',speed:0.9,color:'#ff4444'},
+  {icon:'🚕',speed:1.0,color:'#ffcc00'},{icon:'🚌',speed:0.7,color:'#ff8800'},
+  {icon:'🚎',speed:0.8,color:'#44ff88'},{icon:'🚐',speed:0.85,color:'#ff44cc'},
+  {icon:'🏎️',speed:1.6,color:'#00ffff'},{icon:'🚑',speed:1.3,color:'#ffffff'},
+  {icon:'🚒',speed:1.2,color:'#ff2200'},{icon:'🚓',speed:1.4,color:'#0044ff'},
+  {icon:'🛻',speed:1.0,color:'#88cc44'},{icon:'🚚',speed:0.6,color:'#884422'},
+];
+
+function spawnAI() {
+  const road = roads[Math.floor(Math.random() * roads.length)];
+  const type = AI_TYPES[Math.floor(Math.random() * AI_TYPES.length)];
+  let x, y, dx, dy;
+  if (road.type === 'h') {
+    x = road.x1 + Math.random() * (road.x2 - road.x1);
+    y = road.y + (Math.random() > 0.5 ? -20 : 20);
+    dx = (Math.random() > 0.5 ? 1 : -1) * type.speed;
+    dy = 0;
+  } else {
+    x = road.x + (Math.random() > 0.5 ? -20 : 20);
+    y = road.y1 + Math.random() * (road.y2 - road.y1);
+    dx = 0;
+    dy = (Math.random() > 0.5 ? 1 : -1) * type.speed;
+  }
+  return { x, y, dx, dy, icon:type.icon, color:type.color, angle: Math.atan2(dy, dx) };
+}
+
+for (let i = 0; i < 40; i++) aiVehicles.push(spawnAI());
+
+// ══════════════════════════════════════════════════
+//  COINS
+// ══════════════════════════════════════════════════
+function spawnCoins() {
+  for (let i = 0; i < 80; i++) {
+    const road = roads[Math.floor(Math.random() * roads.length)];
+    let cx, cy;
+    if (road.type === 'h') {
+      cx = road.x1 + Math.random() * (road.x2 - road.x1);
+      cy = road.y;
+    } else {
+      cx = road.x;
+      cy = road.y1 + Math.random() * (road.y2 - road.y1);
+    }
+    coins3d.push({ x:cx, y:cy, collected:false, anim:Math.random()*Math.PI*2 });
+  }
+}
+spawnCoins();
+
+// ══════════════════════════════════════════════════
+//  CANVAS SETUP
+// ══════════════════════════════════════════════════
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight - 56;
+}
+window.addEventListener('resize', () => { resize(); });
+resize();
+
+// ══════════════════════════════════════════════════
+//  INPUT
+// ══════════════════════════════════════════════════
+window.addEventListener('keydown', e => {
+  state.keys[e.key] = true;
+  if (e.key === 'v' || e.key === 'V') openVehicleSelect();
+  if (e.key === 'j' || e.key === 'J') toggleJoystick();
+  if (e.key === 'c' || e.key === 'C') toggleCamera();
+  if (e.key === 'p' || e.key === 'P') togglePause();
+  if (e.key === ' ') { honk(); e.preventDefault(); }
+  e.preventDefault && e.key.startsWith('Arrow') && e.preventDefault();
+});
+window.addEventListener('keyup', e => { state.keys[e.key] = false; });
+
+// Joystick touch
+document.querySelectorAll('.jbtn[data-key]').forEach(btn => {
+  const key = btn.dataset.key;
+  btn.addEventListener('touchstart', e => { e.preventDefault(); state.keys[key]=true; btn.classList.add('pressed'); }, {passive:false});
+  btn.addEventListener('touchend',   e => { e.preventDefault(); state.keys[key]=false; btn.classList.remove('pressed'); }, {passive:false});
+  btn.addEventListener('mousedown',  e => { state.keys[key]=true;  btn.classList.add('pressed'); });
+  btn.addEventListener('mouseup',    e => { state.keys[key]=false; btn.classList.remove('pressed'); });
+});
+document.getElementById('jHorn').addEventListener('click', honk);
+
+// ══════════════════════════════════════════════════
+//  HONK
+// ══════════════════════════════════════════════════
+function honk() {
+  try {
+    const ctx2 = new (window.AudioContext||window.webkitAudioContext)();
+    const osc = ctx2.createOscillator();
+    const gain = ctx2.createGain();
+    osc.connect(gain); gain.connect(ctx2.destination);
+    osc.frequency.value = state.selectedVehicle.id === 'battletank' ? 180 : 440;
+    gain.gain.setValueAtTime(0.3, ctx2.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx2.currentTime + 0.3);
+    osc.start(ctx2.currentTime); osc.stop(ctx2.currentTime + 0.3);
+  } catch(e) {}
+  spawnScorePop(canvas.width/2, canvas.height/2 - 40, '📯 HONK!', '#ffff00');
+}
+
+// ══════════════════════════════════════════════════
+//  PARTICLES
+// ══════════════════════════════════════════════════
+function spawnParticles(x, y, color, count=6) {
+  for (let i=0; i<count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random()-0.5)*4,
+      vy: (Math.random()-0.5)*4,
+      life:1, maxLife:1,
+      color, size: Math.random()*4+2
+    });
+  }
+}
+
+function spawnScorePop(sx, sy, text, color='#ffff00') {
+  const div = document.createElement('div');
+  div.className = 'score-pop';
+  div.style.left = sx+'px';
+  div.style.top  = (sy+56)+'px';
+  div.style.color = color;
+  div.textContent = text;
+  document.body.appendChild(div);
+  setTimeout(()=>div.remove(), 1300);
+}
+
+// ══════════════════════════════════════════════════
+//  DRAW HELPERS
+// ══════════════════════════════════════════════════
+function drawGrid(cx, cy) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,255,255,0.04)';
+  ctx.lineWidth = 1;
+  const spacing = 100;
+  const offX = ((cx % spacing) + spacing) % spacing;
+  const offY = ((cy % spacing) + spacing) % spacing;
+  for (let x=-offX; x<canvas.width; x+=spacing) {
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
+  }
+  for (let y=-offY; y<canvas.height; y+=spacing) {
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function worldToScreen(wx, wy) {
+  const cx = canvas.width/2 - (camera.x) * camera.scale;
+  const cy = canvas.height/2 - (camera.y) * camera.scale;
+  return { sx: cx + wx * camera.scale, sy: cy + wy * camera.scale };
+}
+
+function drawRoads() {
+  // Background grass
+  ctx.fillStyle = '#0d1a0d';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw grid
+  drawGrid(camera.x * camera.scale, camera.y * camera.scale);
+
+  const rw = ROAD_W * camera.scale;
+
+  // Roads
+  roads.forEach(road => {
+    if (road.type === 'h') {
+      const s = worldToScreen(road.x1, road.y - ROAD_W/2);
+      const e = worldToScreen(road.x2, road.y + ROAD_W/2);
+      const len = (road.x2 - road.x1) * camera.scale;
+      if (s.sx > canvas.width || e.sx < 0) return;
+      // Road base
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(s.sx, s.sy, len, rw);
+      // Road edge lines
+      ctx.strokeStyle = 'rgba(0,255,255,0.15)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(s.sx, s.sy, len, rw);
+      // Center dashes
+      ctx.setLineDash([20*camera.scale, 15*camera.scale]);
+      ctx.strokeStyle = 'rgba(255,255,0,0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const mid = worldToScreen(road.x1, road.y);
+      ctx.moveTo(mid.sx, mid.sy);
+      ctx.lineTo(mid.sx + len, mid.sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      const s = worldToScreen(road.x - ROAD_W/2, road.y1);
+      const e = worldToScreen(road.x + ROAD_W/2, road.y2);
+      const len = (road.y2 - road.y1) * camera.scale;
+      if (s.sy > canvas.height || e.sy < 0) return;
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(s.sx, s.sy, rw, len);
+      ctx.strokeStyle = 'rgba(0,255,255,0.15)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(s.sx, s.sy, rw, len);
+      ctx.setLineDash([20*camera.scale, 15*camera.scale]);
+      ctx.strokeStyle = 'rgba(255,255,0,0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const mid = worldToScreen(road.x, road.y1);
+      ctx.moveTo(mid.sx, mid.sy);
+      ctx.lineTo(mid.sx, mid.sy + len);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  });
+
+  // Intersections
+  intersections.forEach(int => {
+    const s = worldToScreen(int.x - ROAD_W/2, int.y - ROAD_W/2);
+    const size = ROAD_W * camera.scale;
+    ctx.fillStyle = '#222236';
+    ctx.fillRect(s.sx, s.sy, size, size);
+    // crosswalk lines
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    for (let i=0; i<5; i++) {
+      const bx = s.sx + i*(size/5);
+      ctx.fillRect(bx+1, s.sy, size/10, size);
+    }
+  });
+}
+
+function drawTrafficLightPole(wx, wy, tlId) {
+  const tl = trafficLights[tlId];
+  const { sx, sy } = worldToScreen(wx, wy);
+  if (sx<-50||sx>canvas.width+50||sy<-50||sy>canvas.height+50) return;
+  const sc = camera.scale;
+
+  // Pole
+  ctx.fillStyle = '#334455';
+  ctx.fillRect(sx-3*sc, sy-30*sc, 6*sc, 30*sc);
+
+  // Housing
+  const hw = 16*sc, hh = 40*sc;
+  ctx.fillStyle = '#111122';
+  ctx.beginPath();
+  ctx.roundRect(sx-hw/2, sy-70*sc, hw, hh, 4*sc);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,255,255,0.3)'; ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Lights
+  const cols = {red:'#ff0044', yellow:'#ffaa00', green:'#00ff88'};
+  ['red','yellow','green'].forEach((c, i) => {
+    const active = tl.state === c;
+    const ly = sy - 62*sc + i * 13*sc;
+    const lr = 5*sc;
+    ctx.beginPath();
+    ctx.arc(sx, ly, lr, 0, Math.PI*2);
+    if (active) {
+      ctx.fillStyle = cols[c];
+      ctx.shadowColor = cols[c];
+      ctx.shadowBlur = 12*sc;
+    } else {
+      ctx.fillStyle = `rgba(${c==='red'?'255,0,68':c==='yellow'?'255,170,0':'0,255,136'},0.15)`;
+      ctx.shadowBlur = 0;
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+}
+
+function drawBuildings() {
+  // Decorative buildings in non-road areas
+  const buildings = [
+    {x:-500,y:-500,w:120,h:200,color:'#0a1a2a'},{x:500,y:-500,w:100,h:160,color:'#0a2a1a'},
+    {x:-500,y:500,w:140,h:180,color:'#1a0a2a'},{x:500,y:500,w:110,h:220,color:'#2a1a0a'},
+    {x:-1400,y:-400,w:160,h:240,color:'#0a0a2a'},{x:1400,y:-400,w:130,h:190,color:'#0a2a2a'},
+    {x:200,y:-1400,w:100,h:150,color:'#1a1a0a'},{x:-200,y:1400,w:120,h:170,color:'#0a1a1a'},
+  ];
+  buildings.forEach(b => {
+    const { sx, sy } = worldToScreen(b.x, b.y);
+    const sw = b.w * camera.scale, sh = b.h * camera.scale;
+    if (sx>canvas.width||sx+sw<0||sy>canvas.height||sy+sh<0) return;
+    ctx.fillStyle = b.color;
+    ctx.fillRect(sx, sy, sw, sh);
+    // Windows grid
+    ctx.fillStyle = 'rgba(0,255,255,0.12)';
+    for (let wx2=0; wx2<b.w; wx2+=20) {
+      for (let wy2=0; wy2<b.h; wy2+=25) {
+        if (Math.random() > 0.4) {
+          ctx.fillRect(sx+wx2*camera.scale+2, sy+wy2*camera.scale+2, 12*camera.scale, 16*camera.scale);
+        }
+      }
+    }
+    ctx.strokeStyle='rgba(0,255,255,0.1)'; ctx.lineWidth=1;
+    ctx.strokeRect(sx, sy, sw, sh);
+  });
+}
+
+function drawCoins(t) {
+  coins3d.forEach(c => {
+    if (c.collected) return;
+    const { sx, sy } = worldToScreen(c.x, c.y);
+    if (sx<-20||sx>canvas.width+20||sy<-20||sy>canvas.height+20) return;
+    c.anim += 0.05;
+    const bob = Math.sin(c.anim) * 4 * camera.scale;
+    const radius = 8 * camera.scale;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(sx, sy+bob, radius, 0, Math.PI*2);
+    ctx.fillStyle = '#ffcc00';
+    ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.font = `${12*camera.scale}px serif`;
+    ctx.fillText('$', sx - 4*camera.scale, sy+bob + 4*camera.scale);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    // Collect check
+    const dx = c.x - player.x, dy = c.y - player.y;
+    if (Math.sqrt(dx*dx+dy*dy) < 40) {
+      c.collected = true;
+      state.coins++;
+      state.score += 10;
+      spawnParticles(sx, sy, '#ffcc00', 8);
+      spawnScorePop(sx, sy, '+10 ⬡', '#ffcc00');
+      document.getElementById('hudCoins').textContent = state.coins;
+      document.getElementById('hudScore').textContent = state.score;
+    }
+  });
+}
+
+function drawAI() {
+  aiVehicles.forEach(ai => {
+    const { sx, sy } = worldToScreen(ai.x, ai.y);
+    if (sx<-40||sx>canvas.width+40||sy<-40||sy>canvas.height+40) return;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(ai.angle);
+    ctx.font = `${20*camera.scale}px serif`;
+    ctx.fillText(ai.icon, -10*camera.scale, 7*camera.scale);
+    ctx.restore();
+    // Shadow
+    ctx.save();
+    ctx.translate(sx, sy+3*camera.scale);
+    ctx.scale(1, 0.3);
+    ctx.beginPath();
+    ctx.arc(0, 0, 12*camera.scale, 0, Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.3)';
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawPlayer(t) {
+  const { sx, sy } = worldToScreen(player.x, player.y);
+  // Shadow
+  ctx.save();
+  ctx.translate(sx, sy + 4*camera.scale);
+  ctx.scale(1.2, 0.3);
+  ctx.beginPath();
+  ctx.arc(0, 0, 18*camera.scale, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fill();
+  ctx.restore();
+
+  // Speed trail
+  if (Math.abs(player.speed) > 1.5) {
+    for (let i=1; i<=5; i++) {
+      const tx = player.x - Math.cos(player.angle) * i * 12;
+      const ty = player.y - Math.sin(player.angle) * i * 12;
+      const { sx:tsx, sy:tsy } = worldToScreen(tx, ty);
+      ctx.save();
+      ctx.globalAlpha = 0.08 * (6-i);
+      ctx.font = `${(22-i*2)*camera.scale}px serif`;
+      ctx.fillText(state.selectedVehicle.icon, tsx-10*camera.scale, tsy+7*camera.scale);
+      ctx.restore();
+    }
+  }
+
+  // Player vehicle
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(player.angle + Math.PI/2);
+  ctx.font = `${26*camera.scale}px serif`;
+  ctx.shadowColor = state.selectedVehicle.color || '#00ffff';
+  ctx.shadowBlur = 20 * camera.scale;
+  ctx.fillText(state.selectedVehicle.icon, -13*camera.scale, 10*camera.scale);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // Player indicator ring
+  ctx.save();
+  ctx.strokeStyle = state.selectedVehicle.color || '#00ffff';
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t*4);
+  ctx.beginPath();
+  ctx.arc(sx, sy, 22*camera.scale, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawParticles() {
+  particles.forEach((p, i) => {
+    p.x += p.vx; p.y += p.vy;
+    p.life -= 0.03;
+    if (p.life <= 0) { particles.splice(i,1); return; }
+    const { sx, sy } = worldToScreen(p.x, p.y);
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.size*camera.scale*p.life, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  PLAYER PHYSICS
+// ══════════════════════════════════════════════════
+function updatePlayer(dt) {
+  const veh = state.selectedVehicle;
+  const maxSpd = (veh.top / 100) * (veh.id.includes('f22')||veh.id.includes('sr71')?0.5:1) * 0.08;
+  const accRate = (veh.acc / 100) * 0.15;
+  const handleRate = (veh.hdl / 100) * 0.045;
+
+  const up    = state.keys['ArrowUp']   || state.keys['w'] || state.keys['W'];
+  const down  = state.keys['ArrowDown'] || state.keys['s'] || state.keys['S'];
+  const left  = state.keys['ArrowLeft'] || state.keys['a'] || state.keys['A'];
+  const right = state.keys['ArrowRight']|| state.keys['d'] || state.keys['D'];
+
+  if (up)    player.speed = Math.min(player.speed + accRate, maxSpd);
+  if (down)  player.speed = Math.max(player.speed - accRate*1.5, -maxSpd*0.4);
+  if (!up && !down) player.speed *= 0.96;
+
+  if (Math.abs(player.speed) > 0.1) {
+    if (left)  player.angle -= handleRate * (player.speed > 0 ? 1 : -1);
+    if (right) player.angle += handleRate * (player.speed > 0 ? 1 : -1);
+  }
+
+  player.x += Math.cos(player.angle) * player.speed;
+  player.y += Math.sin(player.angle) * player.speed;
+
+  // Bounds
+  const half = WORLD/2;
+  player.x = Math.max(-half, Math.min(half, player.x));
+  player.y = Math.max(-half, Math.min(half, player.y));
+
+  const kmh = Math.abs(player.speed) * 800;
+  if (kmh > state.topSpeed) state.topSpeed = kmh;
+  state.totalDist += Math.abs(player.speed);
+  state.fuel = Math.max(0, state.fuel - Math.abs(player.speed)*0.0001);
+
+  // Check traffic light violation
+  const nearInt = mainIntersections.find(int => {
+    const dx=int.x-player.x, dy=int.y-player.y;
+    return Math.sqrt(dx*dx+dy*dy)<80;
+  });
+  if (nearInt && player.speed > 0.5) {
+    const tl = trafficLights[nearInt.tlId];
+    if (tl.state === 'red') {
+      state.violations++;
+      document.getElementById('violations').textContent = state.violations;
+      spawnScorePop(canvas.width/2, canvas.height/2-60,'🚨 RED LIGHT!','#ff0044');
+    }
+  }
+
+  // Camera follow
+  camera.x += (player.x - camera.x) * 0.1;
+  camera.y += (player.y - camera.y) * 0.1;
+  if (state.cameraMode === 1) {
+    camera.targetScale = 0.18;
+  } else if (state.cameraMode === 2) {
+    camera.targetScale = 0.28;
+  } else {
+    const speedFactor = 1 - Math.abs(player.speed) / maxSpd * 0.3;
+    camera.targetScale = Math.max(0.35, Math.min(0.7, speedFactor * 0.55));
+  }
+  camera.scale += (camera.targetScale - camera.scale) * 0.05;
+
+  // Update UI
+  document.getElementById('speedNum').textContent = Math.round(kmh);
+  document.getElementById('speedSlider').value = Math.round(kmh);
+  document.getElementById('telX').textContent = Math.round(player.x);
+  document.getElementById('telY').textContent = Math.round(player.y);
+  document.getElementById('telAngle').textContent = Math.round(player.angle * 180/Math.PI) + '°';
+  const gears = ['N','1','2','3','4','5','6'];
+  document.getElementById('telGear').textContent = player.speed<0.01?'N':gears[Math.min(6,Math.floor(kmh/50)+1)];
+  document.getElementById('bbDist').textContent = Math.round(state.totalDist/100)+'m';
+  document.getElementById('bbTop').textContent = Math.round(state.topSpeed);
+  document.getElementById('bbFuel').textContent = Math.round(state.fuel)+'%';
+  document.getElementById('bbStatus').textContent = player.speed<0.1?'IDLE':player.speed<0?'REV':'GO';
+  document.getElementById('bbStatus').style.color = player.speed<0.1?'rgba(0,255,255,0.4)':player.speed<0?'#ff8800':'#00ff88';
+
+  // Minimap player pos
+  const mapEl = document.getElementById('mmPlayer');
+  const mapPct = { x:(player.x+WORLD/2)/WORLD*100, y:(player.y+WORLD/2)/WORLD*100 };
+  mapEl.style.left = mapPct.x+'%';
+  mapEl.style.top  = mapPct.y+'%';
+}
+
+function updateAI() {
+  aiVehicles.forEach(ai => {
+    ai.x += ai.dx;
+    ai.y += ai.dy;
+    // Wrap
+    if (ai.x > WORLD/2) ai.x = -WORLD/2;
+    if (ai.x < -WORLD/2) ai.x = WORLD/2;
+    if (ai.y > WORLD/2) ai.y = -WORLD/2;
+    if (ai.y < -WORLD/2) ai.y = WORLD/2;
+  });
+  document.getElementById('aiCount').textContent = aiVehicles.length;
+}
+
+// ══════════════════════════════════════════════════
+//  TIMER
+// ══════════════════════════════════════════════════
+function updateTimer() {
+  const secs = Math.floor((Date.now() - state.startTime) / 1000);
+  const m = String(Math.floor(secs/60)).padStart(2,'0');
+  const s = String(secs % 60).padStart(2,'0');
+  document.getElementById('hudTime').textContent = m+':'+s;
+  // Level
+  state.level = 1 + Math.floor(secs / 60);
+  document.getElementById('hudLevel').textContent = state.level;
+}
+
+// ══════════════════════════════════════════════════
+//  MAIN LOOP
+// ══════════════════════════════════════════════════
+let lastFrame = performance.now();
+function loop(ts) {
+  const dt = Math.min((ts - lastFrame)/1000, 0.05);
+  lastFrame = ts;
+
+  if (!state.paused) {
+    updateTrafficLights(dt);
+    updatePlayer(dt);
+    updateAI();
+    updateTimer();
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawRoads();
+    drawBuildings();
+    drawTrafficLightSetup();
+    drawCoins(ts/1000);
+    drawAI();
+    drawPlayer(ts/1000);
+    drawParticles();
+    drawHUDCanvas(ts/1000);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function drawTrafficLightSetup() {
+  mainIntersections.forEach(int => {
+    drawTrafficLightPole(int.x + ROAD_W/2 + 8, int.y - ROAD_W/2 - 8, int.tlId);
+  });
+}
+
+function drawHUDCanvas(t) {
+  // Speed arc
+  const spx = canvas.width - 80, spy = canvas.height - 80;
+  const kmh = Math.abs(player.speed) * 800;
+  const veh = state.selectedVehicle;
+  const maxKmh = veh.top;
+  const pct = Math.min(kmh / maxKmh, 1);
+  const startA = Math.PI*0.75, endA = Math.PI*2.25;
+  const arcA = startA + (endA-startA)*pct;
+
+  ctx.save();
+  ctx.strokeStyle='rgba(0,255,255,0.1)'; ctx.lineWidth=6;
+  ctx.beginPath(); ctx.arc(spx,spy,40,startA,endA); ctx.stroke();
+  if (pct > 0) {
+    const grad = ctx.createConicGradient(startA, spx, spy);
+    grad.addColorStop(0,'#00ff88'); grad.addColorStop(0.6,'#ffff00'); grad.addColorStop(1,'#ff0044');
+    ctx.strokeStyle=grad; ctx.lineWidth=6;
+    ctx.shadowColor='#00ff88'; ctx.shadowBlur=10;
+    ctx.beginPath(); ctx.arc(spx,spy,40,startA,arcA); ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+  ctx.fillStyle='#ffffff'; ctx.font='bold 14px Orbitron';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(Math.round(kmh), spx, spy);
+  ctx.font='8px Orbitron'; ctx.fillStyle='rgba(0,255,255,0.5)';
+  ctx.fillText('KM/H', spx, spy+16);
+  ctx.restore();
+
+  // Compass
+  const cpx = canvas.width - 80, cpy = 50;
+  ctx.save();
+  ctx.strokeStyle='rgba(0,255,255,0.15)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cpx,cpy,22,0,Math.PI*2); ctx.stroke();
+  const needleAngle = -player.angle - Math.PI/2;
+  ctx.strokeStyle='#ff4444'; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(cpx,cpy);
+  ctx.lineTo(cpx+Math.cos(needleAngle)*18, cpy+Math.sin(needleAngle)*18);
+  ctx.stroke();
+  ctx.fillStyle='rgba(0,255,255,0.6)'; ctx.font='8px Orbitron';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('N',cpx,cpy-30);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════
+//  UI FUNCTIONS
+// ══════════════════════════════════════════════════
+function toggleJoystick() {
+  state.joystickVisible = !state.joystickVisible;
+  document.getElementById('joystickWrap').classList.toggle('hidden', !state.joystickVisible);
+  const btn = document.getElementById('btnToggleJoy');
+  btn.classList.toggle('active', state.joystickVisible);
+}
+
+function toggleCamera() {
+  state.cameraMode = (state.cameraMode + 1) % 3;
+  const modes = ['FOLLOW','OVERVIEW','CINEMATIC'];
+  showNotification('📷 CAMERA: '+modes[state.cameraMode]);
+}
+
+function togglePause() {
+  state.paused = !state.paused;
+  showNotification(state.paused ? '⏸️ PAUSED' : '▶️ RESUMED');
+}
+
+function togglePanel(side) {
+  if (side === 'left') {
+    document.getElementById('panelLeft').classList.toggle('collapsed');
+    const toggler = document.getElementById('toggleLeft');
+    const isCollapsed = document.getElementById('panelLeft').classList.contains('collapsed');
+    toggler.style.left = isCollapsed ? '0' : '220px';
+    toggler.textContent = isCollapsed ? '▶' : '◀';
+  } else {
+    document.getElementById('panelRight').classList.toggle('collapsed');
+    const toggler = document.getElementById('toggleRight');
+    const isCollapsed = document.getElementById('panelRight').classList.contains('collapsed');
+    toggler.style.right = isCollapsed ? '0' : '220px';
+    toggler.textContent = isCollapsed ? '◀' : '▶';
+  }
+}
+
+function showNotification(msg) {
+  const old = document.querySelector('.notification');
+  if (old) old.remove();
+  const div = document.createElement('div');
+  div.className = 'notification';
+  div.textContent = msg;
+  document.body.appendChild(div);
+  setTimeout(()=>div.remove(), 2600);
+}
+
+// ══════════════════════════════════════════════════
+//  VEHICLE SELECT
+// ══════════════════════════════════════════════════
+function buildVehicleSelect() {
+  const tabsEl = document.getElementById('vsTabs');
+  const gridEl = document.getElementById('vsGrid');
+  tabsEl.innerHTML = '';
+  VEHICLE_CATS.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'vs-tab' + (cat.key === state.activeVehicleTab ? ' active' : '');
+    btn.textContent = cat.label;
+    btn.onclick = () => { state.activeVehicleTab = cat.key; buildVehicleSelect(); };
+    tabsEl.appendChild(btn);
+  });
+  gridEl.innerHTML = '';
+  const vehicles = VEHICLES[state.activeVehicleTab];
+  vehicles.forEach(veh => {
+    const card = document.createElement('div');
+    card.className = 'vs-card' + (state.pendingVehicle.id === veh.id ? ' selected' : '');
+    card.innerHTML = `
+      <span class="vc-icon">${veh.icon}</span>
+      <div class="vc-name">${veh.name}</div>
+      <div class="vc-sub">${veh.top} KM/H</div>
+      <div class="vs-bars">
+        <div class="vs-bar-row"><span class="vs-bar-label">SPD</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:${Math.min(veh.top/5,100)}%;background:#00ff88;"></div></div></div>
+        <div class="vs-bar-row"><span class="vs-bar-label">ACC</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:${veh.acc}%;background:#00ffff;"></div></div></div>
+        <div class="vs-bar-row"><span class="vs-bar-label">HDL</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:${veh.hdl}%;background:#ff00ff;"></div></div></div>
+      </div>`;
+    card.onclick = () => { state.pendingVehicle = veh; buildVehicleSelect(); };
+    gridEl.appendChild(card);
+  });
+}
+
+function openVehicleSelect() {
+  state.pendingVehicle = state.selectedVehicle;
+  buildVehicleSelect();
+  document.getElementById('vsModal').classList.remove('hidden');
+}
+
+function confirmVehicle() {
+  state.selectedVehicle = state.pendingVehicle;
+  document.getElementById('vsModal').classList.add('hidden');
+  document.getElementById('activeVehicleIcon').textContent = state.selectedVehicle.icon;
+  document.getElementById('activeVehicleName').textContent = state.selectedVehicle.name;
+  const cats = { supercars:'SUPERCAR',aircraft:'AIRCRAFT',motorcycles:'MOTORCYCLE',trucks:'TRUCK',special:'SPECIAL' };
+  const cat = Object.keys(VEHICLES).find(k=>VEHICLES[k].some(v=>v.id===state.selectedVehicle.id));
+  document.getElementById('activeVehicleType').textContent = cats[cat]||'VEHICLE';
+  document.getElementById('activeVehicleBars').innerHTML = `
+    <div class="vs-bar-row"><span class="vs-bar-label">SPD</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:${Math.min(state.selectedVehicle.top/5,100)}%;background:var(--neon-green);"></div></div></div>
+    <div class="vs-bar-row"><span class="vs-bar-label">ACC</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:${state.selectedVehicle.acc}%;background:var(--neon-cyan);"></div></div></div>
+    <div class="vs-bar-row"><span class="vs-bar-label">HDL</span><div class="vs-bar-track"><div class="vs-bar-fill" style="width:${state.selectedVehicle.hdl}%;background:var(--neon-pink);"></div></div></div>
+  `;
+  player.speed = 0;
+  showNotification('🚗 DEPLOYED: '+state.selectedVehicle.name);
+}
+
+// ══════════════════════════════════════════════════
+//  ARCADE BACKGROUND CHARACTERS
+// ══════════════════════════════════════════════════
+const ARCADE_CHARS = ['👾','🕹️','🎮','🎯','👻','🏆','⭐','💥','🔥','⚡','🎲','🎪'];
+function spawnArcadeChar() {
+  const div = document.createElement('div');
+  div.className = 'arcade-char';
+  div.textContent = ARCADE_CHARS[Math.floor(Math.random()*ARCADE_CHARS.length)];
+  div.style.left = Math.random()*100+'vw';
+  const dur = 8 + Math.random()*12;
+  div.style.animationDuration = dur+'s';
+  div.style.animationDelay = '0s';
+  div.style.fontSize = (16+Math.random()*20)+'px';
+  document.getElementById('arcadeBg').appendChild(div);
+  setTimeout(()=>div.remove(), dur*1000+500);
+}
+setInterval(spawnArcadeChar, 600);
+for(let i=0;i<8;i++) setTimeout(spawnArcadeChar, i*200);
+
+// ══════════════════════════════════════════════════
+//  START
+// ══════════════════════════════════════════════════
+requestAnimationFrame(loop);
+buildVehicleSelect();
+// Close modal on backdrop click
+document.getElementById('vsModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('vsModal')) document.getElementById('vsModal').classList.add('hidden');
+});
+</script>
+</body>
+</html>
